@@ -1,5 +1,12 @@
 import pandas as pd
 import re
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import defaultdict
+
+with open("sw.txt") as f:
+    STOPWORDS = f.read()
+    STOPWORDS = STOPWORDS.split("\n")
 
 def process_data():
     DO_sentences = load_sentences('corpora/DO/spa-do_web_2015_100K-sentences.txt')
@@ -20,10 +27,15 @@ def process_data():
     full_dataframe['CO'] = CO_sentences['sentence'].copy()
     full_dataframe['MX'] = MX_sentences['sentence'].copy()
     full_dataframe['GT'] = GT_sentences['sentence'].copy()
+
+    for col in full_dataframe.columns:
+        df = full_dataframe[col].apply(lambda x: re.sub(r'[^\w\s]', '', x))
+        df = df.apply(lambda x: x.lower())
+        full_dataframe[col] = df
+
     print(full_dataframe)
 
-    clean_data(full_dataframe)
-    print(full_dataframe)
+    return full_dataframe
 
 def load_sentences(filename):
     df = pd.read_table(filename, sep='\t', header=0)
@@ -35,7 +47,34 @@ def print_data_stats(df):
     print('Memory Usage = {:.2f} MB'.format(df.memory_usage().sum() / 1024 ** 2))
     print(df)
 
-def clean_data(df):
-    for col in df.columns:
-        df[col] = df[col].apply(lambda x: re.sub(r'[^\w\s]', '', x))
-        df[col] = df[col].apply(lambda x: x.lower())
+def generate_ngrams(text, n_gram=1):
+    token = [token for token in text.lower().split(' ') if token != '' if token not in STOPWORDS]
+    ngrams = zip(*[token[i:] for i in range(n_gram)])
+    return [' '.join(ngram) for ngram in ngrams]
+
+def generate_uni_bi_tri(n, sentences):
+    ngrams = defaultdict(int)
+
+    for sentence in sentences:
+        for word in generate_ngrams(sentence, n):
+            ngrams[word] += 1
+
+    return pd.DataFrame(sorted(ngrams.items(), key=lambda x: x[1])[::-1])
+
+
+def generate_ngram_stats(data, num_ngrams, country_name):
+    fig, axes = plt.subplots(ncols=2, figsize=(18, 50), dpi=100)
+    plt.tight_layout()
+
+    sns.barplot(y=data[0].values[:num_ngrams], x=data[1].values[:num_ngrams], ax=axes[0], color='red')
+
+    axes[0].spines['right'].set_visible(False)
+    axes[0].set_xlabel('')
+    axes[0].set_ylabel('')
+    axes[0].tick_params(axis='x', labelsize=13)
+    axes[0].tick_params(axis='y', labelsize=13)
+
+    axes[0].set_title(f'Top {num_ngrams} most common unigrams in {country_name}', fontsize=15)
+
+
+    plt.show()
